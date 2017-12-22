@@ -35,7 +35,6 @@ char cdgramsccsid[] = "@(#)cdgram.y	2.2 3/30/88";
 prog		: /* empty */
 		| prog stmt
 			{
-			prompt();
 			prev = 0;
 			}
 		;
@@ -143,17 +142,9 @@ stmt		: HELP NL
 			yyerrok;
 			}
 		;
-
 NL		: '\n'
-			{
-			doprompt();
-			}
 		| ';'
-			{
-			noprompt();
-			}
 		;
-
 optNAME		: NAME
 			{
 			Debug((stderr, "optNAME: NAME\n"));

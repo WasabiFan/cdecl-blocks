@@ -4,6 +4,7 @@
 /* into the C file cdecl.c. */
 char cdlexsccsid[] = "@(#)cdlex.l	2.2 3/30/88";
 %}
+%option never-interactive
 
 N	[0-9]
 A	[A-Z_a-z]

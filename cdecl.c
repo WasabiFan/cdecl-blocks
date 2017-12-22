@@ -104,12 +104,6 @@ void free(), exit(), perror();
 /* maximum # of chars from progname to display in prompt */
 #define MAX_NAME 32
 
-/* this is the prompt for readline() to display */
-char cdecl_prompt[MAX_NAME+3];
-
-/* backup copy of prompt to save it while prompting is off */
-char real_prompt[MAX_NAME+3];
-
 #define	MB_SHORT	0001
 #define	MB_LONG		0002
 #define	MB_UNSIGNED	0004
@@ -133,7 +127,6 @@ char real_prompt[MAX_NAME+3];
   int yywrap(void);
   int dostdin(void);
   void mbcheck(void), dohelp(void), usage(void);
-  void prompt(void), doprompt(void), noprompt(void);
   void unsupp(char *, char *);
   void notsupported(char *, char *, char *);
   void yyerror(char *);
@@ -148,7 +141,6 @@ char real_prompt[MAX_NAME+3];
   char *ds(), *cat(), *visible();
   int getopt();
   void mbcheck(), dohelp(), usage();
-  void prompt(), doprompt(), noprompt();
   void unsupp(), notsupported();
   void yyerror();
   void doset(), dodeclare(), docast(), dodexplain(), docexplain();
@@ -183,7 +175,6 @@ int OnATty = 0;			/* stdin is coming from a terminal */
 int Interactive = 0;		/* -i, overrides OnATty */
 int KeywordName = 0;		/* $0 is a keyword (declare, explain, cast) */
 char *progname = "cdecl";	/* $0 */
-int quiet = 0;                  /* -q, quiets prompt and initial help msg */
 
 #if dodebug
 int DebugFlag = 0;		/* -d, output debugging trace info */
@@ -374,30 +365,6 @@ char *options[] = {
   "cplusplus",
   NULL
 };
-
-/* A static variable for holding the line. */
-static char *line_read = NULL;
-
-/* Read a string, and return a pointer to it.  Returns NULL on EOF. */
-char * getline ()
-{
-  /* If the buffer has already been allocated, return the memory
-     to the free pool. */
-  if (line_read != NULL)
-    {
-      free (line_read);
-      line_read = NULL;
-    }
-
-  /* Get a line from the user. */
-  line_read = readline (cdecl_prompt);
-
-  /* If the line has any text in it, save it on the history. */
-  if (line_read && *line_read)
-    add_history (line_read);
-
-  return (line_read);
-}
 
 char ** attempt_completion(char *text, int start, int end)
 {
@@ -776,8 +743,6 @@ void usage()
     (void) fprintf (stderr, "\t-+ Check against C++ Compiler%s\n",
 	CplusplusFlag ? " (the default)" : "");
     (void) fprintf (stderr, "\t-c Create compilable output (include ; and {})\n");
-    (void) fprintf (stderr, "\t-i Force interactive mode\n");
-    (void) fprintf (stderr, "\t-q Quiet prompt\n");
 #ifdef dodebug
     (void) fprintf (stderr, "\t-d Turn on debugging mode\n");
 #endif /* dodebug */
@@ -786,25 +751,6 @@ void usage()
 #endif /* doyydebug */
     exit(1);
     /* NOTREACHED */
-}
-
-/* Manage the prompts. */
-static int prompting;
-
-void doprompt() { prompting = 1; }
-void noprompt() { prompting = 0; }
-
-void prompt()
-{
-#ifndef USE_READLINE
-    if ((OnATty || Interactive) && prompting) {
-	(void) printf("%s", cdecl_prompt);
-# if 0
-	(void) printf("%s> ", progname);
-# endif /* that was the old way to display the prompt */
-	(void) fflush(stdout);
-    }
-#endif
 }
 
 /* Save away the name of the program from argv[0] */
@@ -833,17 +779,6 @@ void cdecl_setprogname(char *argv0)
     for (dot = progname; *dot; dot++)
 	*dot = tolower(*dot);
 #endif /* DOS */
-    /* this sets up the prompt, which is on by default */
-    {
-	int len;
-
-	len = strlen(progname);
-	if (len > MAX_NAME) len = MAX_NAME;
-	strncpy(real_prompt, progname, len);
-	real_prompt[len] = '>';
-	real_prompt[len+1] = ' ';
-	real_prompt[len+2] = '\0';
-    }
 }
 
 /* Run down the list of keywords to see if the */
@@ -880,41 +815,6 @@ char *argn;
 int dostdin()
 {
     int ret;
-    if (OnATty || Interactive)
-	{
-#ifndef USE_READLINE
-	if (!quiet) (void) printf("Type `help' or `?' for help\n");
-	prompt();
-#else
-	char *line, *oldline;
-	int len, newline;
-
-	if (!quiet) (void) printf("Type `help' or `?' for help\n");
-	ret = 0;
-	while ((line = getline())) {
-	    if (!strcmp(line, "quit") || !strcmp(line, "exit")) {
-		free(line);
-		return ret;
-	    }
-	    newline = 0;
-	    /* readline() strips newline, we add semicolon if necessary */
-	    len = strlen(line);
-	    if (len && line[len-1] != '\n' && line[len-1] != ';') {
-		newline = 1;
-		oldline = line;
-		line = malloc(len+2);
-		strcpy(line, oldline);
-		line[len] = ';';
-		line[len+1] = '\0';
-	    }
-	    if (len) ret = dotmpfile_from_string(line);
-	    if (newline) free(line);
-	}
-	puts("");
-	return ret;
-#endif
-	}
-
     yyin = stdin;
     ret = yyparse();
     OnATty = 0;
@@ -1160,10 +1060,6 @@ char *opt;
 	{ MkProgramFlag = 1; }
     else if (strcmp(opt, "nocreate") == 0)
 	{ MkProgramFlag = 0; }
-    else if (strcmp(opt, "prompt") == 0)
-	{ prompting = 1; strcpy(cdecl_prompt, real_prompt); }
-    else if (strcmp(opt, "noprompt") == 0)
-	{ prompting = 0; cdecl_prompt[0] = '\0'; }
 #ifndef USE_READLINE
     /* I cannot seem to figure out what nointeractive was intended to do --
      * it didn't work well to begin with, and it causes problem with
@@ -1217,7 +1113,6 @@ char *opt;
 
 	(void) printf("\nCurrent set values are:\n");
 	(void) printf("\t%screate\n", MkProgramFlag ? "   " : " no");
-	(void) printf("\t%sprompt\n", cdecl_prompt[0] ? "   " : " no");
 	(void) printf("\t%sinteractive\n",
 	    (OnATty || Interactive) ? "   " : " no");
 	if (RitchieFlag)
@@ -1271,13 +1166,10 @@ char **argv;
 #endif /* DOS */
 	CplusplusFlag = 1;
 
-    prompting = OnATty = isatty(0);
-    while ((c = getopt(argc, argv, "cipqrpa+dDV")) != EOF)
+    while ((c = getopt(argc, argv, "crpa+dDV")) != EOF)
 	switch (c)
 	    {
 	    case 'c': MkProgramFlag=1; break;
-	    case 'i': Interactive=1; doprompt(); break;
-	    case 'q': quiet=1; noprompt(); break;
 
 	    /* The following are mutually exclusive. */
 	    /* Only the last one set prevails. */
@@ -1296,25 +1188,13 @@ char **argv;
 	    case '?': usage(); break;
 	    }
 
-    /* Set up the prompt. */
-    if (prompting)
-	strcpy(cdecl_prompt, real_prompt);
-    else
-	cdecl_prompt[0] = '\0';
-
-    /* Run down the list of arguments, parsing each one. */
-
     /* Use standard input if no file names or "-" is found. */
     if (optind == argc)
 	ret += dostdin();
-
-    /* If called as explain, declare or cast, or first */
-    /* argument is one of those, use the command line */
-    /* as the input. */
-    else if (namedkeyword(argv[optind]))
-	ret += dotmpfile(argc, argv);
-    else
-	ret += dofileargs(argc, argv);
+    else {
+        puts("bad input");
+        ret = 101;
+    }
 
     exit(ret);
     /* NOTREACHED */
