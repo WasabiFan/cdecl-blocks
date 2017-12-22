@@ -1,4 +1,8 @@
 %{
+int yylex();
+%}
+
+%{
 /* Yacc grammar for ANSI and C++ cdecl. */
 /* The output of this file is included */
 /* into the C file cdecl.c. */

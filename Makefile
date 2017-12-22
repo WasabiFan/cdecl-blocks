@@ -53,6 +53,9 @@ install: cdecl
 	$(INSTALL_DATA) cdecl.1 $(MANDIR)
 	$(INSTALL_DATA) c++decl.1 $(MANDIR)
 
+emscripten: cdgram.c cdlex.c
+	emcc cdecl.c --std=c89 -o cdecl.js
+
 clean:
 	rm -f cdgram.c cdlex.c cdecl y.output c++decl
 
