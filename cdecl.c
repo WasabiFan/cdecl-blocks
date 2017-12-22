@@ -136,7 +136,6 @@ void free(), exit(), perror();
   void dodexplain(char*, char*, char*, char*, char*);
   void docexplain(char*, char*, char*, char*);
   void cdecl_setprogname(char *);
-  int dotmpfile(int, char**), dofileargs(int, char**);
 #else
   char *ds(), *cat(), *visible();
   int getopt();
@@ -145,9 +144,7 @@ void free(), exit(), perror();
   void yyerror();
   void doset(), dodeclare(), docast(), dodexplain(), docexplain();
   void cdecl_setprogname();
-  int dotmpfile(), dofileargs();
 #endif /* __STDC__ */
-  FILE *tmpfile();
 
 /* variables used during parsing */
 unsigned modbits = 0;
@@ -171,8 +168,6 @@ int RitchieFlag = 0;		/* -r, assume Ritchie PDP C language */
 int MkProgramFlag = 0;		/* -c, output {} and ; after declarations */
 int PreANSIFlag = 0;		/* -p, assume pre-ANSI C language */
 int CplusplusFlag = 0;		/* -+, assume C++ language */
-int OnATty = 0;			/* stdin is coming from a terminal */
-int Interactive = 0;		/* -i, overrides OnATty */
 int KeywordName = 0;		/* $0 is a keyword (declare, explain, cast) */
 char *progname = "cdecl";	/* $0 */
 
@@ -817,127 +812,6 @@ int dostdin()
     int ret;
     yyin = stdin;
     ret = yyparse();
-    OnATty = 0;
-    return ret;
-}
-
-#ifdef USE_READLINE
-/* Write a string into a file and treat that file as the input. */
-int dotmpfile_from_string(s)
-char *s;
-{
-    int ret = 0;
-    FILE *tmpfp = tmpfile();
-    if (!tmpfp)
-	{
-	int sverrno = errno;
-	(void) fprintf (stderr, "%s: cannot open temp file\n",
-	    progname);
-	errno = sverrno;
-	perror(progname);
-	return 1;
-	}
-
-    if (fputs(s, tmpfp) == EOF)
-	{
-	int sverrno;
-	sverrno = errno;
-	(void) fprintf (stderr, "%s: error writing to temp file\n",
-	    progname);
-	errno = sverrno;
-	perror(progname);
-	(void) fclose(tmpfp);
-	rmtmpfile();
-	return 1;
-	}
-
-    rewind(tmpfp);
-    yyin = tmpfp;
-    ret += yyparse();
-    (void) fclose(tmpfp);
-    rmtmpfile();
-
-    return ret;
-}
-#endif /* USE_READLINE */
-
-/* Write the arguments into a file */
-/* and treat that file as the input. */
-int dotmpfile(argc, argv)
-int argc;
-char **argv;
-{
-    int ret = 0;
-    FILE *tmpfp = tmpfile();
-    if (!tmpfp)
-	{
-	int sverrno = errno;
-	(void) fprintf (stderr, "%s: cannot open temp file\n",
-	    progname);
-	errno = sverrno;
-	perror(progname);
-	return 1;
-	}
-
-    if (KeywordName)
-	if (fputs(progname, tmpfp) == EOF)
-	    {
-	    int sverrno;
-	errwrite:
-	    sverrno = errno;
-	    (void) fprintf (stderr, "%s: error writing to temp file\n",
-		progname);
-	    errno = sverrno;
-	    perror(progname);
-	    (void) fclose(tmpfp);
-	    rmtmpfile();
-	    return 1;
-	    }
-
-    for ( ; optind < argc; optind++)
-	if (fprintf(tmpfp, " %s", argv[optind]) == EOF)
-	    goto errwrite;
-
-    if (putc('\n', tmpfp) == EOF)
-	goto errwrite;
-
-    rewind(tmpfp);
-    yyin = tmpfp;
-    ret += yyparse();
-    (void) fclose(tmpfp);
-    rmtmpfile();
-
-    return ret;
-}
-
-/* Read each of the named files for input. */
-int dofileargs(argc, argv)
-int argc;
-char **argv;
-{
-    FILE *ifp;
-    int ret = 0;
-
-    for ( ; optind < argc; optind++)
-	if (strcmp(argv[optind], "-") == 0)
-	    ret += dostdin();
-
-	else if ((ifp = fopen(argv[optind], "r")) == NULL)
-	    {
-	    int sverrno = errno;
-	    (void) fprintf (stderr, "%s: cannot open %s\n",
-		progname, argv[optind]);
-	    errno = sverrno;
-	    perror(argv[optind]);
-	    ret++;
-	    }
-
-	else
-	    {
-	    yyin = ifp;
-	    ret += yyparse();
-	    }
-
     return ret;
 }
 
@@ -1060,16 +934,6 @@ char *opt;
 	{ MkProgramFlag = 1; }
     else if (strcmp(opt, "nocreate") == 0)
 	{ MkProgramFlag = 0; }
-#ifndef USE_READLINE
-    /* I cannot seem to figure out what nointeractive was intended to do --
-     * it didn't work well to begin with, and it causes problem with
-     * readline, so I'm removing it, for now.  -i still works.
-     */
-    else if (strcmp(opt, "interactive") == 0)
-	{ Interactive = 1; }
-    else if (strcmp(opt, "nointeractive") == 0)
-	{ Interactive = 0; OnATty = 0; }
-#endif
     else if (strcmp(opt, "ritchie") == 0)
 	{ CplusplusFlag=0; RitchieFlag=1; PreANSIFlag=0; }
     else if (strcmp(opt, "preansi") == 0)
@@ -1113,8 +977,7 @@ char *opt;
 
 	(void) printf("\nCurrent set values are:\n");
 	(void) printf("\t%screate\n", MkProgramFlag ? "   " : " no");
-	(void) printf("\t%sinteractive\n",
-	    (OnATty || Interactive) ? "   " : " no");
+	(void) printf("\t%sinteractive\n", " no");
 	if (RitchieFlag)
 	    (void) printf("\t   ritchie\n");
 	else
@@ -1159,12 +1022,6 @@ char **argv;
 #endif
 
     cdecl_setprogname(argv[0]);
-#ifdef DOS
-    if (strcmp(progname, "cppdecl") == 0)
-#else
-    if (strcmp(progname, "c++decl") == 0)
-#endif /* DOS */
-	CplusplusFlag = 1;
 
     while ((c = getopt(argc, argv, "crpa+dDV")) != EOF)
 	switch (c)
@@ -1191,7 +1048,8 @@ char **argv;
     /* Use standard input if no file names or "-" is found. */
     if (optind == argc)
 	ret += dostdin();
-    else {
+    else
+    {
         puts("bad input");
         ret = 101;
     }
