@@ -1,6 +1,6 @@
 This is a **fork of** the version of cdecl maintained by @ridiculous_fish and available at https://cdecl.org. The fork here has been modified (with little regard for code integrity) to be compilable with emscripten, making it usable as a pure JavaScript module. The `emscripten` `make` target will build the `cdecl.js` file.
 
-**Warning:** This modified version only supports reading a single statement from stdin and printing the result to stdout. Interactive features were torn out to make emscripten support easier. Furthermore, this work was done by @wasabifan, who knows almost nothing about any of the technologies involved. It's a wonder it works at all.
+**Warning:** This modified version only supports ingesting a single statement from command-line arguments and printing the result to stdout. Interactive features were torn out to make emscripten support easier. Furthermore, this work was done by @wasabifan, who knows almost nothing about any of the technologies involved. It's a wonder it works at all.
 
 That being said, I'm happy to chat about it in Issues if anyone has questions.
 
