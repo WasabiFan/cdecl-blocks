@@ -78,15 +78,8 @@ char cdeclsccsid[] = "@(#)cdecl.c	2.5 1/15/96";
 # endif /* ndef NOVARARGS */
 char *malloc();
 void free(), exit(), perror();
-# ifdef BSD
-#  include <strings.h>
-   extern int errno;
-#  define strrchr rindex
-#  define NOTMPFILE
-# else
-#  include <string.h>
-#  include <errno.h>
-# endif /* BSD */
+# include <string.h>
+# include <errno.h>
 # ifdef NOVOID
 #  define void int
 # endif /* NOVOID */
@@ -125,7 +118,6 @@ void free(), exit(), perror();
   char *ds(char *), *cat(char *, ...), *visible(int);
   int main(int, char **);
   int yywrap(void);
-  int dostdin(void);
   void mbcheck(void), dohelp(void), usage(void);
   void unsupp(char *, char *);
   void notsupported(char *, char *, char *);
@@ -136,7 +128,7 @@ void free(), exit(), perror();
   void dodexplain(char*, char*, char*, char*, char*);
   void docexplain(char*, char*, char*, char*);
   void cdecl_setprogname(char *);
-  int dotmpfile(int, char**), dofileargs(int, char**);
+  int dotmpfile(int, char**);
 #else
   char *ds(), *cat(), *visible();
   int getopt();
@@ -145,7 +137,7 @@ void free(), exit(), perror();
   void yyerror();
   void doset(), dodeclare(), docast(), dodexplain(), docexplain();
   void cdecl_setprogname();
-  int dotmpfile(), dofileargs();
+  int dotmpfile();
 #endif /* __STDC__ */
   FILE *tmpfile();
 
@@ -171,8 +163,6 @@ int RitchieFlag = 0;		/* -r, assume Ritchie PDP C language */
 int MkProgramFlag = 0;		/* -c, output {} and ; after declarations */
 int PreANSIFlag = 0;		/* -p, assume pre-ANSI C language */
 int CplusplusFlag = 0;		/* -+, assume C++ language */
-int OnATty = 0;			/* stdin is coming from a terminal */
-int Interactive = 0;		/* -i, overrides OnATty */
 int KeywordName = 0;		/* $0 is a keyword (declare, explain, cast) */
 char *progname = "cdecl";	/* $0 */
 
@@ -585,54 +575,6 @@ int c;
     return buf;
 }
 
-#ifdef NOTMPFILE
-/* provide a conservative version of tmpfile() */
-/* for those systems without it. */
-/* tmpfile() returns a FILE* of a file opened */
-/* for read&write. It is supposed to be */
-/* automatically removed when it gets closed, */
-/* but here we provide a separate rmtmpfile() */
-/* function to perform that function. */
-/* Also provide several possible file names to */
-/* try for opening. */
-static char *file4tmpfile = 0;
-
-FILE *tmpfile()
-{
-    static char *listtmpfiles[] =
-	{
-	//"/usr/tmp/cdeclXXXXXX",
-	//"/tmp/cdeclXXXXXX",
-	"/cdeclXXXXXX",
-	//"cdeclXXXXXX",
-	0
-	};
-
-    char **listp = listtmpfiles;
-    for ( ; *listp; listp++)
-	{
-	FILE *retfp;
-	(void) mktemp(*listp);
-	retfp = fopen(*listp, "w+");
-	if (!retfp)
-	    continue;
-	file4tmpfile = *listp;
-	return retfp;
-	}
-
-    return 0;
-}
-
-void rmtmpfile()
-{
-    if (file4tmpfile)
-	(void) unlink(file4tmpfile);
-}
-#else
-/* provide a mock rmtmpfile() for normal systems */
-# define rmtmpfile()	/* nothing */
-#endif /* NOTMPFILE */
-
 #ifndef NOGETOPT
 extern int optind;
 #else
@@ -809,57 +751,6 @@ char *argn;
     /* nope, must be file name arguments */
     return 0;
 }
-
-/* Read from standard input, turning */
-/* on prompting if necessary. */
-int dostdin()
-{
-    int ret;
-    yyin = stdin;
-    ret = yyparse();
-    OnATty = 0;
-    return ret;
-}
-
-#ifdef USE_READLINE
-/* Write a string into a file and treat that file as the input. */
-int dotmpfile_from_string(s)
-char *s;
-{
-    int ret = 0;
-    FILE *tmpfp = tmpfile();
-    if (!tmpfp)
-	{
-	int sverrno = errno;
-	(void) fprintf (stderr, "%s: cannot open temp file\n",
-	    progname);
-	errno = sverrno;
-	perror(progname);
-	return 1;
-	}
-
-    if (fputs(s, tmpfp) == EOF)
-	{
-	int sverrno;
-	sverrno = errno;
-	(void) fprintf (stderr, "%s: error writing to temp file\n",
-	    progname);
-	errno = sverrno;
-	perror(progname);
-	(void) fclose(tmpfp);
-	rmtmpfile();
-	return 1;
-	}
-
-    rewind(tmpfp);
-    yyin = tmpfp;
-    ret += yyparse();
-    (void) fclose(tmpfp);
-    rmtmpfile();
-
-    return ret;
-}
-#endif /* USE_READLINE */
 
 /* Write the arguments into a file */
 /* and treat that file as the input. */
@@ -890,7 +781,6 @@ char **argv;
 	    errno = sverrno;
 	    perror(progname);
 	    (void) fclose(tmpfp);
-	    rmtmpfile();
 	    return 1;
 	    }
 
@@ -905,38 +795,6 @@ char **argv;
     yyin = tmpfp;
     ret += yyparse();
     (void) fclose(tmpfp);
-    rmtmpfile();
-
-    return ret;
-}
-
-/* Read each of the named files for input. */
-int dofileargs(argc, argv)
-int argc;
-char **argv;
-{
-    FILE *ifp;
-    int ret = 0;
-
-    for ( ; optind < argc; optind++)
-	if (strcmp(argv[optind], "-") == 0)
-	    ret += dostdin();
-
-	else if ((ifp = fopen(argv[optind], "r")) == NULL)
-	    {
-	    int sverrno = errno;
-	    (void) fprintf (stderr, "%s: cannot open %s\n",
-		progname, argv[optind]);
-	    errno = sverrno;
-	    perror(argv[optind]);
-	    ret++;
-	    }
-
-	else
-	    {
-	    yyin = ifp;
-	    ret += yyparse();
-	    }
 
     return ret;
 }
@@ -1103,8 +961,7 @@ char *opt;
 
 	(void) printf("\nCurrent set values are:\n");
 	(void) printf("\t%screate\n", MkProgramFlag ? "   " : " no");
-	(void) printf("\t%sinteractive\n",
-	    (OnATty || Interactive) ? "   " : " no");
+	(void) printf("\t%sinteractive\n", " no");
 	if (RitchieFlag)
 	    (void) printf("\t   ritchie\n");
 	else
@@ -1149,12 +1006,6 @@ char **argv;
 #endif
 
     cdecl_setprogname(argv[0]);
-#ifdef DOS
-    if (strcmp(progname, "cppdecl") == 0)
-#else
-    if (strcmp(progname, "c++decl") == 0)
-#endif /* DOS */
-	CplusplusFlag = 1;
 
     while ((c = getopt(argc, argv, "crpa+dDV")) != EOF)
 	switch (c)
