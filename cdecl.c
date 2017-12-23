@@ -601,10 +601,10 @@ FILE *tmpfile()
 {
     static char *listtmpfiles[] =
 	{
-	"/usr/tmp/cdeclXXXXXX",
-	"/tmp/cdeclXXXXXX",
+	//"/usr/tmp/cdeclXXXXXX",
+	//"/tmp/cdeclXXXXXX",
 	"/cdeclXXXXXX",
-	"cdeclXXXXXX",
+	//"cdeclXXXXXX",
 	0
 	};
 
@@ -1060,16 +1060,6 @@ char *opt;
 	{ MkProgramFlag = 1; }
     else if (strcmp(opt, "nocreate") == 0)
 	{ MkProgramFlag = 0; }
-#ifndef USE_READLINE
-    /* I cannot seem to figure out what nointeractive was intended to do --
-     * it didn't work well to begin with, and it causes problem with
-     * readline, so I'm removing it, for now.  -i still works.
-     */
-    else if (strcmp(opt, "interactive") == 0)
-	{ Interactive = 1; }
-    else if (strcmp(opt, "nointeractive") == 0)
-	{ Interactive = 0; OnATty = 0; }
-#endif
     else if (strcmp(opt, "ritchie") == 0)
 	{ CplusplusFlag=0; RitchieFlag=1; PreANSIFlag=0; }
     else if (strcmp(opt, "preansi") == 0)
@@ -1188,13 +1178,7 @@ char **argv;
 	    case '?': usage(); break;
 	    }
 
-    /* Use standard input if no file names or "-" is found. */
-    if (optind == argc)
-	ret += dostdin();
-    else {
-        puts("bad input");
-        ret = 101;
-    }
+    dotmpfile(argc, argv);
 
     exit(ret);
     /* NOTREACHED */
